@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Neural Translator</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --accent: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --border: #334155;
+            --text: #f1f5f9;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at top left, #1e293b, #0f172a);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 850px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        h2 {
+            margin-top: 0;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        select {
+            background: #1e293b;
+            color: white;
+            border: 1px solid var(--border);
+            padding: 10px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        select:focus { border-color: var(--accent); }
+
+        .arrow { color: var(--accent); font-weight: bold; font-size: 1.2rem; }
+
+        .text-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            background: rgba(15, 23, 42, 0.6);
+            color: white;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 15px;
+            resize: none;
+            font-size: 1rem;
+            box-sizing: border-box;
+            transition: border 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        /* Progress Bar Container */
+        .progress-wrapper {
+            height: 4px;
+            width: 100%;
+            background: #1e293b;
+            border-radius: 2px;
+            margin: 25px 0;
+            overflow: hidden;
+            visibility: hidden; /* Hidden by default */
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+            transition: width 0.4s ease;
+        }
+
+        .btn-row {
+            display: flex;
+            justify-content: center;
+        }
+
+        button {
+            background: var(--accent);
+            color: #0f172a;
+            border: none;
+            padding: 14px 40px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+            .text-container { grid-template-columns: 1fr; }
+            .card { padding: 20px; margin: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>AI/ML based text-to-text machine translation from Nepalese and Sinhalese to English</h2>
+
+    <div class="controls">
+        <select id="src">
+            <option value="si">Sinhala</option>
+            <option value="ne">Nepali</option>
+            <option value="te">Telugu</option>
+            <option value="kn">Kannada</option>
+            <option value="hi">Hindi</option>
+        </select>
+
+        <div class="arrow">⇄</div>
+
+        <select id="tgt">
+            <option value="en">English</option>
+            <option value="si">Sinhala</option>
+            <option value="hi">Hindi</option>
+        </select>
+    </div>
+
+    <div class="text-container">
+        <textarea id="input" placeholder="Enter text to translate..."></textarea>
+        <textarea id="output" placeholder="Translation will appear here..." readonly></textarea>
+    </div>
+
+    <div class="progress-wrapper" id="progressWrapper">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <div class="btn-row">
+        <button id="translateBtn" onclick="doTranslate()">
+            Translate Now
+        </button>
+    </div>
+</div>
+
+<script>
+async function doTranslate() {
+    const text = document.getElementById("input").value;
+    const src = document.getElementById("src").value;
+    const tgt = document.getElementById("tgt").value;
+    const btn = document.getElementById("translateBtn");
+    const pBar = document.getElementById("progressBar");
+    const pWrapper = document.getElementById("progressWrapper");
+
+    if (!text.trim()) return;
+
+    // UI Feedback Start
+    btn.disabled = true;
+    btn.innerText = "Processing...";
+    pWrapper.style.visibility = "visible";
+    pBar.style.width = "30%";
+
+    try {
+        // Simulate progress while waiting for fetch
+        setTimeout(() => { pBar.style.width = "60%"; }, 500);
+
+        const res = await fetch("/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text, src, tgt })
+        });
+
+        pBar.style.width = "90%";
+        const data = await res.json();
+        
+        pBar.style.width = "100%";
+        document.getElementById("output").value = data.translation;
+
+    } catch (error) {
+        console.error("Translation error:", error);
+        alert("Translation failed. Please check your backend connection.");
+    } finally {
+        // UI Reset
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.innerText = "Translate Now";
+            pBar.style.width = "0%";
+            pWrapper.style.visibility = "hidden";
+        }, 500);
+    }
+}
+</script>
+</body>
+</html>
