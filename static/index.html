@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoTranslate — NLLB Offline Translator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet" />
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --font: 'Outfit', system-ui, sans-serif;
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.5);
+            --accent-hover: #a78bfa;
+            --success: #10b981;
+            --error: #ef4444;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 10px;
+        }
+
+        /* ─── ANIMATED BACKGROUND ────────────────────────────────────── */
+        body {
+            height: 100vh;
+            background: #0f0c29;
+            /* fallback */
+            background: radial-gradient(circle at 15% 50%, #240b36 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, #480048 0%, transparent 50%),
+                radial-gradient(circle at 50% 100%, #1a1a2e 0%, #0f0c29 100%);
+            background-size: 200% 200%;
+            animation: gradientMove 15s ease infinite alternate;
+            color: var(--text-main);
+            font-family: var(--font);
+            font-size: 16px;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        @keyframes gradientMove {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        /* Ambient Glow Orbs */
+        .orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .orb-1 {
+            width: 400px;
+            height: 400px;
+            background: rgba(139, 92, 246, 0.3);
+            top: -100px;
+            left: -100px;
+        }
+
+        .orb-2 {
+            width: 300px;
+            height: 300px;
+            background: rgba(56, 189, 248, 0.2);
+            bottom: -50px;
+            right: 10%;
+        }
+
+        /* ─── TOP BAR ──────────────────────────────────────────────── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            height: 70px;
+            background: rgba(15, 12, 41, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            flex-shrink: 0;
+            z-index: 10;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #fff;
+            text-decoration: none;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .logo-mark {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #d946ef);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 800;
+            color: #fff;
+            box-shadow: 0 4px 15px var(--accent-glow);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .badge {
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.1);
+            color: #e2e8f0;
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            padding: 4px 12px;
+            margin-left: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .chip {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 100px;
+            padding: 6px 16px;
+            backdrop-filter: blur(10px);
+        }
+
+        /* ─── MAIN APP CONTAINER ─────────────────────────────────────── */
+        main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 40px 40px 20px;
+            gap: 20px;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        /* ─── GLASS PANEL SHARED ─────────────────────────────────────── */
+        .glass-panel {
+            background: rgba(20, 20, 35, 0.4);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        /* ─── LANG BAR ──────────────────────────────────────────────── */
+        .lang-bar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+        }
+
+        .lang-label {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            min-width: 60px;
+        }
+
+        .lang-select-wrap {
+            position: relative;
+            flex: 1;
+        }
+
+        .lang-select-wrap select {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            padding: 12px 40px 12px 16px;
+            font-size: 16px;
+            font-weight: 500;
+            font-family: var(--font);
+            cursor: pointer;
+            outline: none;
+            appearance: none;
+            -webkit-appearance: none;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .lang-select-wrap select:hover,
+        .lang-select-wrap select:focus {
+            background: rgba(0, 0, 0, 0.3);
+            border-color: var(--glass-highlight);
+            box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+        }
+
+        .lang-select-wrap select option {
+            background: #1e1b4b;
+            /* dark indigo fallback for options */
+            color: #fff;
+        }
+
+        .lang-select-wrap::after {
+            content: '▼';
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 10px;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .swap-btn {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            color: var(--text-main);
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .swap-btn:hover {
+            border-color: var(--accent);
+            color: #fff;
+            background: var(--accent);
+            transform: scale(1.1) rotate(180deg);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .swap-btn svg {
+            transition: transform 0.4s;
+        }
+
+        /* ─── PANELS ────────────────────────────────────────────────── */
+        .panels {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            flex: 1;
+        }
+
+        .panel {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: border-color 0.3s, box-shadow 0.3s;
+            position: relative;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            z-index: 1;
+        }
+
+        .panel.active {
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 20px rgba(139, 92, 246, 0.1);
+        }
+
+        .panel.streaming {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent), 0 0 30px var(--accent-glow);
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .panel-lang {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .panel-lang::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: background 0.3s;
+        }
+
+        .panel.active .panel-lang::before {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        .panel.streaming .panel-lang::before {
+            background: var(--success);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+        }
+
+
+        .panel-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .icon-btn {
+            background: var(--glass-bg);
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .icon-btn:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--glass-border);
+            transform: translateY(-2px);
+        }
+
+        .icon-btn.copied {
+            color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .upload-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        textarea {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            color: var(--text-main);
+            font-family: var(--font);
+            font-size: 20px;
+            font-weight: 400;
+            line-height: 1.6;
+            padding: 24px;
+            min-height: 400px;
+        }
+
+        textarea::placeholder {
+            color: rgba(255, 255, 255, 0.2);
+            font-weight: 300;
+        }
+
+        .output-area {
+            flex: 1;
+            padding: 24px;
+            font-size: 20px;
+            font-weight: 400;
+            line-height: 1.6;
+            min-height: 400px;
+            overflow-y: auto;
+            word-break: break-word;
+            white-space: pre-wrap;
+            color: #fff;
+        }
+
+        .output-placeholder {
+            color: rgba(255, 255, 255, 0.2);
+            font-weight: 300;
+        }
+
+        /* ─── CURSOR & DOTS ─────────────────────────────────────────── */
+        .cursor {
+            display: inline-block;
+            width: 3px;
+            height: 1.2em;
+            background: var(--accent);
+            margin-left: 2px;
+            vertical-align: text-bottom;
+            border-radius: 2px;
+            opacity: 0;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .cursor.on {
+            animation: blink 0.9s step-end infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0
+            }
+        }
+
+        .dots {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 24px;
+        }
+
+        .dots.on {
+            display: flex;
+        }
+
+        .dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--accent);
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: dot-bounce 1.4s ease-in-out infinite;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .dots span:nth-child(2) {
+            animation-delay: .2s;
+        }
+
+        .dots span:nth-child(3) {
+            animation-delay: .4s;
+        }
+
+        @keyframes dot-bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: translateY(0);
+                opacity: .3;
+            }
+
+            40% {
+                transform: translateY(-8px);
+                opacity: 1;
+            }
+        }
+
+        /* ─── STATUS BAR ────────────────────────────────────────────── */
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 0 8px;
+            margin-top: 10px;
+        }
+
+        .char-info {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            white-space: nowrap;
+            min-width: 80px;
+            background: var(--glass-bg);
+            padding: 4px 12px;
+            border-radius: 100px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .char-info.warn {
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .progress-track {
+            flex: 1;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #6366f1, #d946ef);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            box-shadow: 0 0 10px rgba(217, 70, 239, 0.5);
+        }
+
+        .latency-pill {
+            font-size: 13px;
+            font-weight: 600;
+            color: #a7f3d0;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            border-radius: 100px;
+            padding: 4px 14px;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.4s;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+        }
+
+        .latency-pill.on {
+            opacity: 1;
+        }
+
+        /* ─── INSTRUCTIONS COMPONENT ───────────────────────────────── */
+        .instructions-wrap {
+            margin-top: 20px;
+            padding: 24px;
+        }
+
+        .instructions-wrap h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #fff;
+        }
+
+        .instructions-wrap h3 svg {
+            color: var(--accent-hover);
+        }
+
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .step-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            transition: background 0.2s;
+        }
+
+        .step-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .step-number {
+            display: inline-flex;
+            width: 24px;
+            height: 24px;
+            background: var(--accent);
+            color: white;
+            border-radius: 50%;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .step-card h4 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #fff;
+        }
+
+        .step-card p {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* Loading overlay for file upload */
+        .upload-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 12, 41, 0.7);
+            backdrop-filter: blur(4px);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-lg);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .upload-overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+
+        /* ─── PRINT STYLES FOR PDF EXPORT ───────────────────────────── */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+
+            body {
+                background: white !important;
+                color: black !important;
+            }
+
+            #tgtPanel,
+            #tgtPanel * {
+                visibility: visible;
+            }
+
+            #tgtPanel {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                border: none !important;
+                box-shadow: none !important;
+                background: white !important;
+            }
+
+            .panel-head,
+            .dots,
+            .cursor {
+                display: none !important;
+            }
+
+            .output-area {
+                color: black !important;
+                font-size: 14pt !important;
+                white-space: pre-wrap !important;
+                overflow: visible !important;
+                padding: 0 !important;
+            }
+        }
+
+        /* ─── RESPONSIVE ────────────────────────────────────────────── */
+        @media (max-width: 900px) {
+            .panels {
+                grid-template-columns: 1fr;
+            }
+
+            main {
+                padding: 20px;
+            }
+
+            .topbar {
+                padding: 0 20px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Ambient Orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <header class="topbar">
+        <a class="logo" href="#">
+            <div class="logo-mark">GT</div>
+            GoTranslate
+            <span class="badge">Liquid HD</span>
+        </a>
+        <div class="topbar-right">
+            <span class="chip">Neural Core</span>
+            <span class="chip">Offline Server</span>
+        </div>
+    </header>
+
+    <main>
+        <!-- Language selector bar -->
+        <div class="lang-bar glass-panel">
+            <span class="lang-label">From</span>
+            <div class="lang-select-wrap">
+                <select id="srcLang">
+                    <option value="en">English</option>
+                    <option value="hi">Hindi</option>
+                    <option value="si">Sinhala</option>
+                    <option value="ne">Nepali</option>
+                    <option value="te">Telugu</option>
+                    <option value="kn">Kannada</option>
+                    <option value="ta">Tamil</option>
+                    <option value="ml">Malayalam</option>
+                </select>
+            </div>
+
+            <button class="swap-btn" id="swapBtn" title="Swap languages">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m16 3 4 4-4 4" />
+                    <path d="M20 7H4" />
+                    <path d="m8 21-4-4 4-4" />
+                    <path d="M4 17h16" />
+                </svg>
+            </button>
+
+            <span class="lang-label" style="text-align:right">To</span>
+            <div class="lang-select-wrap">
+                <select id="tgtLang">
+                    <option value="hi">Hindi</option>
+                    <option value="en">English</option>
+                    <option value="si">Sinhala</option>
+                    <option value="ne">Nepali</option>
+                    <option value="te">Telugu</option>
+                    <option value="kn">Kannada</option>
+                    <option value="ta">Tamil</option>
+                    <option value="ml">Malayalam</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Two-panel translator -->
+        <div class="panels">
+            <!-- Source panel -->
+            <div class="panel glass-panel" id="srcPanel">
+                <div class="upload-overlay" id="uploadOverlay">
+                    <div class="spinner"></div>
+                    <div style="font-weight: 500;">Extracting document...</div>
+                </div>
+                <div class="panel-head">
+                    <span class="panel-lang" id="srcLangLabel">English</span>
+                    <div class="panel-actions">
+                        <label class="icon-btn upload-label" title="Upload .txt or .pdf">
+                            <input type="file" id="fileInput" accept=".txt,.pdf">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48">
+                                </path>
+                            </svg>
+                        </label>
+                        <button class="icon-btn" id="clearBtn" title="Clear Text">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18" />
+                                <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <textarea id="inputText" placeholder="Type text, paste, or upload a document..." maxlength="8000"
+                    spellcheck="false"></textarea>
+            </div>
+
+            <!-- Target panel -->
+            <div class="panel glass-panel" id="tgtPanel">
+                <div class="panel-head">
+                    <span class="panel-lang" id="tgtLangLabel">Hindi</span>
+                    <div class="panel-actions">
+                        <button class="icon-btn" id="printBtn" title="Save as PDF">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                        <button class="icon-btn" id="copyBtn" title="Copy Translation">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="dots" id="dots"><span></span><span></span><span></span></div>
+                <div class="output-area" id="outputArea">
+                    <span class="output-placeholder" id="placeholder">Translated liquid text will materialize
+                        here...</span><span id="outputText" style="display:none"></span><span class="cursor"
+                        id="cursor"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="status">
+            <span class="char-info" id="charInfo">0 / 8000</span>
+            <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <span class="latency-pill" id="latencyPill">—</span>
+        </div>
+
+        <!-- Instructions Section -->
+        <div class="instructions-wrap glass-panel">
+            <h3>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                How to use GoTranslate
+            </h3>
+            <div class="steps-grid">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h4>Select Languages</h4>
+                    <p>Choose your source and target languages from the sleek top selectors.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h4>Provide Text</h4>
+                    <p>Type manually, paste, or click the 📎 icon to upload a .txt or .pdf document.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h4>Auto-Translate</h4>
+                    <p>Sit back as neural translation instantly streams your text contextually.</p>
+                </div>
+                <div class="step-card">
+                    <div class="step-number">4</div>
+                    <h4>Copy or Export</h4>
+                    <p>Use the copy icon or click the download 📥 icon to flawlessly save as a PDF.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const srcLang = $('srcLang');
+        const tgtLang = $('tgtLang');
+        const inputText = $('inputText');
+        const outputArea = $('outputArea');
+        const outputText = $('outputText');
+        const placeholder = $('placeholder');
+        const cursor = $('cursor');
+        const dots = $('dots');
+        const charInfo = $('charInfo');
+        const progressFill = $('progressFill');
+        const latencyPill = $('latencyPill');
+        const srcPanel = $('srcPanel');
+        const tgtPanel = $('tgtPanel');
+        const srcLangLabel = $('srcLangLabel');
+        const tgtLangLabel = $('tgtLangLabel');
+        const copyBtn = $('copyBtn');
+        const clearBtn = $('clearBtn');
+        const swapBtn = $('swapBtn');
+        const printBtn = $('printBtn');
+        const fileInput = $('fileInput');
+        const uploadOverlay = $('uploadOverlay');
+
+        const LANG_NAMES = {
+            en: 'English', hi: 'Hindi', si: 'Sinhala', ne: 'Nepali',
+            te: 'Telugu', kn: 'Kannada', ta: 'Tamil', ml: 'Malayalam'
+        };
+
+        const MAX_CHARS = 8000;
+
+        let debounceTimer = null;
+        let activeController = null;
+
+        // ── State helpers ─────────────────────────────────────────────
+        function showThinking() {
+            placeholder.style.display = 'none';
+            outputText.style.display = 'none';
+            cursor.classList.remove('on');
+            dots.classList.add('on');
+            tgtPanel.classList.remove('streaming');
+            latencyPill.classList.remove('on');
+        }
+
+        function startStreaming() {
+            dots.classList.remove('on');
+            outputText.textContent = '';
+            outputText.style.display = 'inline';
+            cursor.classList.add('on');
+            tgtPanel.classList.add('streaming');
+        }
+
+        function doneStreaming(latency, device) {
+            cursor.classList.remove('on');
+            tgtPanel.classList.remove('streaming');
+            latencyPill.textContent = `${latency} ms · ${device}`;
+            latencyPill.classList.add('on');
+        }
+
+        function resetOutput() {
+            dots.classList.remove('on');
+            outputText.textContent = '';
+            outputText.style.display = 'none';
+            placeholder.style.display = 'inline';
+            cursor.classList.remove('on');
+            tgtPanel.classList.remove('streaming');
+            latencyPill.classList.remove('on');
+        }
+
+        // ── Upload ─────────────────────────────────────────────────────
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Optional: check file size (e.g. max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                alert("File is too large. Max 5MB allowed.");
+                fileInput.value = "";
+                return;
+            }
+
+            uploadOverlay.classList.add('active');
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const res = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Upload failed");
+                }
+
+                const data = await res.json();
+                let text = data.text;
+                if (text.length > MAX_CHARS) {
+                    alert(`Text truncated to ${MAX_CHARS} characters.`);
+                    text = text.substring(0, MAX_CHARS);
+                }
+
+                inputText.value = text;
+                inputText.dispatchEvent(new Event('input'));
+
+            } catch (err) {
+                alert("Error extracting document: " + err.message);
+            } finally {
+                uploadOverlay.classList.remove('active');
+                fileInput.value = ""; // reset
+            }
+        });
+
+        // ── Translate ──────────────────────────────────────────────────
+        async function translate() {
+            const text = inputText.value;
+            if (!text.trim()) { resetOutput(); return; }
+
+            if (activeController) { activeController.abort(); activeController = null; }
+            const controller = new AbortController();
+            activeController = controller;
+
+            showThinking();
+            let firstToken = true;
+
+            try {
+                const resp = await fetch('/translate/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text, src: srcLang.value, tgt: tgtLang.value }),
+                    signal: controller.signal,
+                });
+
+                const reader = resp.body.getReader();
+                const dec = new TextDecoder();
+                let buf = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buf += dec.decode(value, { stream: true });
+
+                    const lines = buf.split('\n');
+                    buf = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data:')) continue;
+                        const data = JSON.parse(line.slice(5).trim());
+
+                        if (data.done) {
+                            doneStreaming(data.latency_ms, data.device);
+                            activeController = null;
+                        } else if (data.token !== undefined) {
+                            if (firstToken) { startStreaming(); firstToken = false; }
+                            outputText.textContent += data.token;
+                            outputArea.scrollTop = outputArea.scrollHeight;
+                        }
+                    }
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                cursor.classList.remove('on');
+                dots.classList.remove('on');
+                outputText.style.display = 'inline';
+                placeholder.style.display = 'none';
+                outputText.textContent = '⚠ ' + e.message;
+            }
+        }
+
+        // ── Input handler ─────────────────────────────────────────────
+        inputText.addEventListener('input', () => {
+            const len = inputText.value.length;
+            charInfo.textContent = `${len} / ${MAX_CHARS}`;
+            charInfo.classList.toggle('warn', len > MAX_CHARS * 0.9);
+            progressFill.style.width = `${Math.min((len / MAX_CHARS) * 100, 100)}%`;
+            srcPanel.classList.toggle('active', len > 0);
+
+            if (activeController) { activeController.abort(); activeController = null; }
+            clearTimeout(debounceTimer);
+
+            if (!len) { resetOutput(); return; }
+            // Longer debounce if text is huge
+            const debounceTime = len > 1000 ? 500 : 250;
+            debounceTimer = setTimeout(translate, debounceTime);
+        });
+
+        // ── Controls ──────────────────────────────────────────────────
+        swapBtn.addEventListener('click', () => {
+            [srcLang.value, tgtLang.value] = [tgtLang.value, srcLang.value];
+            updateLabels();
+            clearTimeout(debounceTimer);
+            if (inputText.value.trim()) translate();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            inputText.value = '';
+            inputText.dispatchEvent(new Event('input'));
+            inputText.focus();
+        });
+
+        copyBtn.addEventListener('click', () => {
+            const txt = outputText.textContent;
+            if (!txt) return;
+            navigator.clipboard.writeText(txt).then(() => {
+                copyBtn.classList.add('copied');
+                setTimeout(() => copyBtn.classList.remove('copied'), 1500);
+            });
+        });
+
+        // Save as PDF (Triggers Print specific to translation output)
+        printBtn.addEventListener('click', () => {
+            if (!outputText.textContent.trim()) {
+                alert("Nothing to export yet!");
+                return;
+            }
+            window.print();
+        });
+
+        [srcLang, tgtLang].forEach(el => el.addEventListener('change', () => {
+            updateLabels();
+            clearTimeout(debounceTimer);
+            if (inputText.value.trim()) translate();
+        }));
+
+        function updateLabels() {
+            srcLangLabel.textContent = LANG_NAMES[srcLang.value] || srcLang.value;
+            tgtLangLabel.textContent = LANG_NAMES[tgtLang.value] || tgtLang.value;
+        }
+
+        // Initial setup
+        updateLabels();
+    </script>
+</body>
+
+</html>
